@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced 3-Tier Network Design Tool</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #cbd5e1; /* Slate 300 */
+        }
+
+        .container {
+            display: grid; /* Use CSS Grid */
+            grid-template-rows: auto 1fr; /* Header row, content row takes remaining space */
+            width: 100%;
+            height: 100vh;
+        }
+
+        /* --- Instructions Bar --- */
+        #instructions-bar {
+            background-color: #1e293b; /* Slate 800 */
+            padding: 0.5rem 1.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            color: #94a3b8; /* Slate 400 */
+            z-index: 20;
+            text-align: center;
+            font-size: 0.875rem;
+        }
+
+        .main-content {
+            display: grid; /* Use CSS Grid */
+            grid-template-columns: 240px 1fr 280px; /* Left palette, flexible canvas, right panel */
+            overflow: hidden;
+            min-height: 0;
+        }
+        
+        /* --- Device Palette --- */
+        .device-palette {
+            background-color: #1e293b; /* Slate 800 */
+            padding: 1rem;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            z-index: 10;
+            overflow-y: auto;
+        }
+
+        .device-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem;
+            background-color: #334155; /* Slate 700 */
+            border-radius: 0.5rem;
+            cursor: grab;
+            transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+            user-select: none;
+            border: 1px solid #475569; /* Slate 600 */
+        }
+        .device-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            background-color: #475569; /* Slate 600 */
+        }
+        .device-icon {
+            font-size: 1.2rem;
+            margin-right: 0.6rem;
+            width: 20px;
+            text-align: center;
+        }
+        .device-item[draggable="true"]:active {
+            cursor: grabbing;
+        }
+
+        /* --- Canvas Area --- */
+        .canvas-container {
+            position: relative;
+            background-image: radial-gradient(#334155 1px, transparent 1px);
+            background-size: 20px 20px;
+            overflow: hidden;
+            cursor: default;
+        }
+        .canvas-container.connect-mode {
+            cursor: crosshair;
+        }
+
+        #network-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+        .device-node {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 3;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+        }
+        .device-node.selected {
+            border-color: #38bdf8;
+            box-shadow: 0 0 15px rgba(56, 189, 248, 0.7);
+            transform: scale(1.1);
+        }
+        .device-node.highlight {
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
+            70% { box-shadow: 0 0 10px 10px rgba(56, 189, 248, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+        }
+        .device-node.router { background-color: #7c3aed; }
+        .device-node.core-switch { background-color: #db2777; }
+        .device-node.distribution-switch { background-color: #2563eb; }
+        .device-node.access-switch { background-color: #059669; }
+        .device-node.pc { background-color: #d97706; }
+
+        .device-node-label {
+            position: absolute;
+            bottom: -22px;
+            font-size: 0.7rem;
+            color: #f1f5f9;
+            white-space: nowrap;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 1);
+            background-color: rgba(15, 23, 42, 0.6);
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        .device-node-icon {
+            color: #f8fafc;
+            font-size: 1.4rem;
+        }
+
+        /* --- Control/Info Panel --- */
+        .info-panel {
+            background-color: #1e293b;
+            padding: 1rem;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            z-index: 10;
+            overflow-y: auto;
+        }
+        .control-button {
+            background-color: #334155;
+            color: #f1f5f9;
+            font-weight: bold;
+            padding: 0.6rem 0.75rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s;
+            border: 1px solid #475569;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .control-button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            background-color: #475569;
+        }
+        .control-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .control-button.active {
+            background-color: #2563eb;
+            border-color: #1d4ed8;
+            color: white;
+        }
+        .control-button.primary {
+            background-color: #2563eb;
+            border-color: #1d4ed8;
+        }
+        .control-button.primary:hover:not(:disabled) {
+            background-color: #1d4ed8;
+        }
+        .control-button.danger {
+            background-color: #be123c;
+            border-color: #9f1239;
+        }
+        .control-button.danger:hover:not(:disabled) {
+            background-color: #9f1239;
+        }
+
+        /* --- Modal --- */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+        .modal-content {
+            background-color: #1e293b;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            max-width: 500px;
+            color: #cbd5e1;
+            border: 1px solid #475569;
+        }
+        .modal-header {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            color: #38bdf8;
+        }
+        .modal-body {
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+        }
+        .modal-body ul {
+            text-align: left;
+            margin: 1rem auto;
+            width: fit-content;
+            padding-left: 1rem;
+        }
+        .modal-body li {
+            margin-top: 0.5rem;
+        }
+
+        /* --- Info Panel Details --- */
+        #info-content {
+            background-color: #334155;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            font-size: 0.8rem;
+        }
+        #info-content h4 {
+            font-weight: bold;
+            color: #38bdf8;
+            margin-bottom: 0.5rem;
+        }
+        #info-content p, #info-content pre {
+            margin-bottom: 0.25rem;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* --- Packet Info --- */
+        #packet-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(15, 23, 42, 0.8);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            z-index: 5;
+            font-size: 0.75rem;
+            color: #cbd5e1;
+            border: 1px solid #334155;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Instructions Bar -->
+        <div id="instructions-bar">
+            <strong>How to Use:</strong> 1. Drag devices. | 2. Click <strong>Connect Tool</strong>, then click two devices. | 3. Double-click a link to delete.
+        </div>
+        
+        <div class="main-content">
+            <!-- Device Palette -->
+            <div class="device-palette">
+                <h2 class="text-lg font-bold text-center mb-2 text-white">Device Palette</h2>
+                <div id="router" class="device-item" draggable="true"><i class="fa-solid fa-route device-icon text-violet-400"></i><span>Router</span></div>
+                <div id="core-switch" class="device-item" draggable="true"><i class="fa-solid fa-layer-group device-icon text-pink-400"></i><span>Core Switch</span></div>
+                <div id="distribution-switch" class="device-item" draggable="true"><i class="fa-solid fa-server device-icon text-blue-400"></i><span>Dist. Switch</span></div>
+                <div id="access-switch" class="device-item" draggable="true"><i class="fa-solid fa-network-wired device-icon text-emerald-400"></i><span>Access Switch</span></div>
+                <div id="pc" class="device-item" draggable="true"><i class="fa-solid fa-desktop device-icon text-amber-400"></i><span>PC</span></div>
+            </div>
+
+            <!-- Canvas Area -->
+            <div id="canvas-container" class="canvas-container">
+                <canvas id="network-canvas"></canvas>
+                <div id="packet-info"></div>
+            </div>
+
+            <!-- Control & Info Panel -->
+            <div class="info-panel">
+                <h2 class="text-lg font-bold text-center mb-2 text-white">Controls & Info</h2>
+                
+                <!-- Action Buttons -->
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="connect-tool-btn" class="control-button"><i class="fa-solid fa-link"></i>Connect Tool</button>
+                    <button id="validate-btn" class="control-button"><i class="fa-solid fa-check-double"></i>Validate</button>
+                </div>
+
+                <!-- Simulation Controls -->
+                <div class="mt-2 p-3 bg-[#334155] rounded-lg">
+                    <p class="text-sm font-semibold mb-2 text-center">Packet Simulation</p>
+                    <select id="source-pc" class="w-full bg-[#1e293b] border border-[#475569] text-white p-2 rounded-md mb-2 text-sm"></select>
+                    <select id="destination-pc" class="w-full bg-[#1e293b] border border-[#475569] text-white p-2 rounded-md mb-2 text-sm"></select>
+                    <button id="send-packet-btn" class="control-button primary w-full mt-1"><i class="fa-solid fa-paper-plane"></i>Send Ping</button>
+                </div>
+                
+                <!-- Device Info -->
+                <div class="flex-grow">
+                    <h3 class="text-md font-bold text-center mb-2 text-white">Device Information</h3>
+                    <div id="info-content">
+                        <p class="text-slate-400">Click a device to view its details.</p>
+                    </div>
+                </div>
+
+                <!-- Reset Button -->
+                <button id="reset-btn" class="control-button danger"><i class="fa-solid fa-trash-can"></i>Reset Canvas</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div id="modal-header" class="modal-header"></div>
+            <div id="modal-body" class="modal-body"></div>
+            <div class="modal-footer">
+                <button class="control-button primary" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State & Configuration ---
+        const state = {
+            devices: [],
+            connections: [],
+            selectedDeviceIds: [],
+            deviceCounter: {},
+            isAnimating: false,
+            isConnectMode: false,
+        };
+
+        const config = {
+            deviceHierarchy: {
+                'router': 4,
+                'core-switch': 3,
+                'distribution-switch': 2,
+                'access-switch': 1,
+                'pc': 0
+            },
+            packetColors: {
+                'ping-request': '#34d399', // Emerald 400
+                'ping-reply': '#facc15',   // Yellow 400
+            }
+        };
+
+        // --- DOM Element References ---
+        const dom = {
+            canvasContainer: document.getElementById('canvas-container'),
+            canvas: document.getElementById('network-canvas'),
+            ctx: document.getElementById('network-canvas').getContext('2d'),
+            paletteItems: document.querySelectorAll('.device-item'),
+            connectToolBtn: document.getElementById('connect-tool-btn'),
+            validateBtn: document.getElementById('validate-btn'),
+            sendPacketBtn: document.getElementById('send-packet-btn'),
+            resetBtn: document.getElementById('reset-btn'),
+            sourcePcSelect: document.getElementById('source-pc'),
+            destinationPcSelect: document.getElementById('destination-pc'),
+            modal: document.getElementById('modal'),
+            modalHeader: document.getElementById('modal-header'),
+            modalBody: document.getElementById('modal-body'),
+            infoContent: document.getElementById('info-content'),
+            packetInfo: document.getElementById('packet-info'),
+        };
+
+        // --- Initial Setup ---
+        window.addEventListener('load', initialize);
+        window.addEventListener('resize', resizeCanvas);
+
+        function initialize() {
+            resizeCanvas();
+            setupEventListeners();
+            updateUI();
+        }
+
+        function resizeCanvas() {
+            dom.canvas.width = dom.canvasContainer.clientWidth;
+            dom.canvas.height = dom.canvasContainer.clientHeight;
+            draw();
+        }
+
+        // --- Event Listeners ---
+        function setupEventListeners() {
+            dom.paletteItems.forEach(item => {
+                item.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', e.target.id));
+            });
+            dom.canvasContainer.addEventListener('dragover', e => e.preventDefault());
+            dom.canvasContainer.addEventListener('drop', handleDrop);
+            dom.canvas.addEventListener('dblclick', handleDeleteConnection);
+            dom.connectToolBtn.addEventListener('click', handleConnectToolToggle);
+            dom.validateBtn.addEventListener('click', handleValidate);
+            dom.sendPacketBtn.addEventListener('click', handleSendPacket);
+            dom.resetBtn.addEventListener('click', handleReset);
+        }
+
+        // --- Core Logic: Device & Connection Management ---
+        function addDevice(type, x, y) {
+            state.deviceCounter[type] = (state.deviceCounter[type] || 0) + 1;
+            const id = `${type}-${state.deviceCounter[type]}`;
+            
+            const newDevice = {
+                id, type, x, y,
+                ports: {},
+                macAddress: generateMacAddress(),
+                ipAddress: type === 'pc' ? `192.168.1.${state.deviceCounter[type]}` : null,
+                subnetMask: type === 'pc' ? '255.255.255.0' : null,
+                defaultGateway: type === 'pc' ? '192.168.1.254' : null,
+                macTable: type.includes('switch') ? {} : undefined,
+            };
+
+            if (type === 'router') {
+                newDevice.ipAddress = '192.168.1.254';
+                newDevice.subnetMask = '255.255.255.0';
+            }
+
+            state.devices.push(newDevice);
+            createDeviceElement(newDevice);
+            updateUI();
+        }
+
+        function createDeviceElement(device) {
+            const el = document.createElement('div');
+            el.id = device.id;
+            el.className = `device-node ${device.type}`;
+            el.style.left = `${device.x - 35}px`;
+            el.style.top = `${device.y - 35}px`;
+
+            const iconClass = {
+                'router': 'fa-route', 'core-switch': 'fa-layer-group', 'distribution-switch': 'fa-server',
+                'access-switch': 'fa-network-wired', 'pc': 'fa-desktop'
+            }[device.type];
+
+            el.innerHTML = `
+                <i class="fa-solid ${iconClass} device-node-icon"></i>
+                <span class="device-node-label">${device.id.toUpperCase()}</span>
+            `;
+
+            el.addEventListener('click', e => {
+                e.stopPropagation();
+                handleDeviceClick(device.id);
+            });
+            
+            el.addEventListener('mousedown', e => {
+                e.stopPropagation();
+                makeDraggable(el, device, e);
+            });
+
+            dom.canvasContainer.appendChild(el);
+        }
+
+        function addConnection(fromId, toId) {
+            const fromDevice = findDevice(fromId);
+            const toDevice = findDevice(toId);
+
+            if (!fromDevice || !toDevice || fromId === toId) return;
+
+            const existing = state.connections.find(c =>
+                (c.from === fromId && c.to === toId) || (c.from === toId && c.to === fromId)
+            );
+            if (existing) return;
+
+            const fromPort = getNextAvailablePort(fromDevice);
+            const toPort = getNextAvailablePort(toDevice);
+
+            state.connections.push({ from: fromId, to: toId, fromPort, toPort });
+            fromDevice.ports[fromPort] = { connectedTo: toId, port: toPort };
+            toDevice.ports[toPort] = { connectedTo: fromId, port: fromPort };
+
+            draw();
+        }
+
+        // --- Event Handlers ---
+        function handleDrop(e) {
+            e.preventDefault();
+            const type = e.dataTransfer.getData('text/plain');
+            const rect = dom.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            addDevice(type, x, y);
+        }
+
+        function handleConnectToolToggle() {
+            state.isConnectMode = !state.isConnectMode;
+            state.selectedDeviceIds = []; // Clear selections when toggling mode
+            updateUI();
+        }
+
+        function handleDeviceClick(deviceId) {
+            const index = state.selectedDeviceIds.indexOf(deviceId);
+
+            if (state.isConnectMode) {
+                if (index > -1) {
+                    state.selectedDeviceIds.splice(index, 1); // Deselect if already selected
+                } else {
+                    state.selectedDeviceIds.push(deviceId); // Select
+                }
+
+                if (state.selectedDeviceIds.length === 2) {
+                    addConnection(state.selectedDeviceIds[0], state.selectedDeviceIds[1]);
+                    state.selectedDeviceIds = []; // Reset for next connection
+                }
+            } else {
+                // Normal info selection mode
+                if (index > -1) {
+                    state.selectedDeviceIds = []; // Deselect
+                } else {
+                    state.selectedDeviceIds = [deviceId]; // Select for info
+                }
+            }
+            updateUI();
+        }
+
+        function handleDeleteConnection(e) {
+            const rect = dom.canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            let deleted = false;
+            for (let i = state.connections.length - 1; i >= 0; i--) {
+                const conn = state.connections[i];
+                const fromDevice = findDevice(conn.from);
+                const toDevice = findDevice(conn.to);
+                if (fromDevice && toDevice) {
+                    const dist = pointLineDistance(clickX, clickY, fromDevice.x, fromDevice.y, toDevice.x, toDevice.y);
+                    if (dist < 10) {
+                        delete fromDevice.ports[conn.fromPort];
+                        delete toDevice.ports[conn.toPort];
+                        state.connections.splice(i, 1);
+                        deleted = true;
+                        break; 
+                    }
+                }
+            }
+            if (deleted) {
+                draw();
+                updateUI();
+            }
+        }
+        
+        function handleValidate() {
+            const violations = [];
+            // Tiers that are allowed to have redundant, same-tier connections
+            const allowedSameTierRedundancy = ['core-switch', 'distribution-switch'];
+
+            state.connections.forEach(conn => {
+                const fromDevice = findDevice(conn.from);
+                const toDevice = findDevice(conn.to);
+                const fromTier = config.deviceHierarchy[fromDevice.type];
+                const toTier = config.deviceHierarchy[toDevice.type];
+
+                // Check for same-tier connections
+                if (fromTier === toTier) {
+                    // If the connection is between same-tier devices, check if it's an allowed type for redundancy
+                    if (!allowedSameTierRedundancy.includes(fromDevice.type)) {
+                        violations.push(`Invalid same-tier connection: ${fromDevice.id.toUpperCase()} to ${toDevice.id.toUpperCase()}. Only Core or Distribution switches can be linked at the same tier.`);
+                    }
+                } 
+                // If tiers are different, they must be adjacent (difference of 1)
+                else if (Math.abs(fromTier - toTier) !== 1) {
+                    violations.push(`Invalid hierarchical connection: ${fromDevice.id.toUpperCase()} to ${toDevice.id.toUpperCase()}. Devices must connect to an adjacent tier.`);
+                }
+            });
+
+            if (violations.length === 0) {
+                openModal('Validation Success!', 'Your network design follows the 3-tier hierarchy rules, including valid redundancies.');
+            } else {
+                openModal('Design Violations', `<ul>${violations.map(v => `<li>${v}</li>`).join('')}</ul>`);
+            }
+        }
+
+
+        async function handleSendPacket() {
+            if (state.isAnimating) return;
+            const sourceId = dom.sourcePcSelect.value;
+            const destId = dom.destinationPcSelect.value;
+            if (!sourceId || !destId || sourceId === destId) {
+                openModal('Packet Error', 'Please select valid and different source/destination devices.');
+                return;
+            }
+            
+            state.isAnimating = true;
+            updateUI();
+
+            const sourceDevice = findDevice(sourceId);
+            const destDevice = findDevice(destId);
+
+            // Clear MAC tables before simulation for a fresh run
+            state.devices.filter(d => d.type.includes('switch')).forEach(sw => sw.macTable = {});
+            updateDeviceInfoPanel();
+
+            const path = findPath(sourceId, destId);
+            if (path) {
+                await simulatePacket(path, 'ping-request', {
+                    srcMac: sourceDevice.macAddress, destMac: destDevice.macAddress,
+                    srcIp: sourceDevice.ipAddress, destIp: destDevice.ipAddress
+                });
+                const replyPath = [...path].reverse();
+                await simulatePacket(replyPath, 'ping-reply', {
+                    srcMac: destDevice.macAddress, destMac: sourceDevice.macAddress,
+                    srcIp: destDevice.ipAddress, destIp: sourceDevice.ipAddress
+                });
+            } else {
+                openModal('Routing Error', 'No valid path found between the selected devices.');
+            }
+
+            state.isAnimating = false;
+            draw();
+            updateUI();
+        }
+
+        function handleReset() {
+            state.devices = [];
+            state.connections = [];
+            state.selectedDeviceIds = [];
+            state.deviceCounter = {};
+            state.isAnimating = false;
+            state.isConnectMode = false;
+            dom.canvasContainer.querySelectorAll('.device-node').forEach(n => n.remove());
+            draw();
+            updateUI();
+            openModal('Canvas Reset', 'The network design has been cleared.');
+        }
+
+        // --- Simulation Logic ---
+        async function simulatePacket(path, type, packetData) {
+            const packetSize = 8;
+            const animationSpeed = 800; // Time per hop in ms
+
+            for (let i = 0; i < path.length - 1; i++) {
+                const startNode = path[i];
+                const endNode = path[i+1];
+                
+                showPacketInfo(type, packetData);
+                highlightNode(startNode.id, true);
+
+                // Simulate MAC address learning on switches
+                if (startNode.type.includes('switch')) {
+                    // This logic is simplified. In reality, the switch learns the source MAC from the frame's arrival port.
+                    // For this simulation, we'll find the port leading to the *previous* node in the path.
+                    const previousNode = (i > 0) ? path[i-1] : sourceNode;
+                    const incomingPort = findPortConnecting(startNode, previousNode);
+                    if (packetData.srcMac && incomingPort) {
+                        startNode.macTable[packetData.srcMac] = incomingPort;
+                    }
+                    updateDeviceInfoPanel();
+                }
+
+                const startX = startNode.x, startY = startNode.y;
+                const endX = endNode.x, endY = endNode.y;
+                const distance = Math.hypot(endX - startX, endY - startY);
+                const steps = Math.max(1, distance / 10); // More steps for longer lines
+                const stepX = (endX - startX) / steps, stepY = (endY - startY) / steps;
+
+                for (let j = 0; j < steps; j++) {
+                    draw(); // Redraw the base network
+                    dom.ctx.fillStyle = config.packetColors[type] || '#ffffff';
+                    dom.ctx.beginPath();
+                    dom.ctx.arc(startX + j * stepX, startY + j * stepY, packetSize, 0, Math.PI * 2);
+                    dom.ctx.fill();
+                    await new Promise(r => setTimeout(r, animationSpeed / steps));
+                }
+                highlightNode(startNode.id, false);
+            }
+            // Highlight the final destination node
+            highlightNode(path[path.length - 1].id, true);
+            await new Promise(r => setTimeout(r, 500));
+            highlightNode(path[path.length - 1].id, false);
+            hidePacketInfo();
+        }
+
+        // --- Drawing & UI Updates ---
+        function draw() {
+            dom.ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
+            
+            dom.ctx.strokeStyle = '#475569';
+            dom.ctx.lineWidth = 2.5;
+            state.connections.forEach(conn => {
+                const fromDevice = findDevice(conn.from);
+                const toDevice = findDevice(conn.to);
+                if (fromDevice && toDevice) {
+                    dom.ctx.beginPath();
+                    dom.ctx.moveTo(fromDevice.x, fromDevice.y);
+                    dom.ctx.lineTo(toDevice.x, toDevice.y);
+                    dom.ctx.stroke();
+                }
+            });
+        }
+
+        function updateUI() {
+            // Update device node selections
+            document.querySelectorAll('.device-node').forEach(el => {
+                el.classList.toggle('selected', state.selectedDeviceIds.includes(el.id));
+            });
+            
+            // Update connect tool button and canvas cursor
+            dom.connectToolBtn.classList.toggle('active', state.isConnectMode);
+            dom.canvasContainer.classList.toggle('connect-mode', state.isConnectMode);
+
+            // Update packet sender dropdowns
+            const pcs = state.devices.filter(d => d.type === 'pc');
+            const destinations = state.devices.filter(d => d.type === 'pc' || d.type === 'router');
+            updateSelect(dom.sourcePcSelect, pcs, 'Select Source');
+            updateSelect(dom.destinationPcSelect, destinations, 'Select Destination');
+            dom.sendPacketBtn.disabled = state.isAnimating;
+            
+            updateDeviceInfoPanel();
+        }
+
+        function updateDeviceInfoPanel() {
+            // Show info for the last selected device, only in normal mode
+            if (!state.isConnectMode && state.selectedDeviceIds.length > 0) {
+                const device = findDevice(state.selectedDeviceIds[0]);
+                if (!device) return;
+                let html = `<h4>${device.id.toUpperCase()}</h4>`;
+                html += `<p><strong>Type:</strong> ${device.type}</p>`;
+                html += `<p><strong>MAC:</strong> ${device.macAddress}</p>`;
+                if (device.ipAddress) html += `<p><strong>IP:</strong> ${device.ipAddress}</p>`;
+                if (device.macTable) {
+                    html += `<p><strong>MAC Table:</strong></p>`;
+                    const tableEntries = Object.entries(device.macTable);
+                    if (tableEntries.length > 0) {
+                        html += `<pre>${tableEntries.map(([mac, port]) => `${mac} -> Port ${port}`).join('\n')}</pre>`;
+                    } else {
+                        html += `<pre>Empty</pre>`;
+                    }
+                }
+                dom.infoContent.innerHTML = html;
+            } else {
+                dom.infoContent.innerHTML = `<p class="text-slate-400">Click a device to view its details.</p>`;
+            }
+        }
+
+        function updateSelect(selectEl, items, defaultText) {
+            const currentValue = selectEl.value;
+            selectEl.innerHTML = `<option value="">${defaultText}</option>`;
+            items.forEach(item => {
+                selectEl.innerHTML += `<option value="${item.id}">${item.id.toUpperCase()}</option>`;
+            });
+            selectEl.value = items.some(item => item.id === currentValue) ? currentValue : "";
+        }
+
+        function showPacketInfo(type, data) {
+            dom.packetInfo.style.display = 'block';
+            let content = `<strong>Type:</strong> ${type}<br>`;
+            for (const key in data) {
+                content += `<strong>${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</strong> ${data[key]}<br>`;
+            }
+            dom.packetInfo.innerHTML = content;
+        }
+        function hidePacketInfo() { dom.packetInfo.style.display = 'none'; }
+
+        function highlightNode(nodeId, state) {
+            document.getElementById(nodeId)?.classList.toggle('highlight', state);
+        }
+
+        // --- Utility Functions ---
+        function findDevice(id) { return state.devices.find(d => d.id === id); }
+        function generateMacAddress() {
+            return 'XX:XX:XX:XX:XX:XX'.replace(/X/g, () => "0123456789ABCDEF".charAt(Math.floor(Math.random() * 16)));
+        }
+        function getNextAvailablePort(device) {
+            let port = 1;
+            while (device.ports[port]) port++;
+            return port;
+        }
+        function makeDraggable(el, device, initialEvent) {
+            let isDragging = true;
+            let offsetX = initialEvent.clientX - el.getBoundingClientRect().left;
+            let offsetY = initialEvent.clientY - el.getBoundingClientRect().top;
+            el.style.cursor = 'grabbing';
+            el.style.zIndex = '10';
+
+            function onMouseMove(e) {
+                if (isDragging) {
+                    const rect = dom.canvasContainer.getBoundingClientRect();
+                    device.x = e.clientX - rect.left - offsetX + (el.offsetWidth / 2);
+                    device.y = e.clientY - rect.top - offsetY + (el.offsetHeight / 2);
+                    el.style.left = `${device.x - (el.offsetWidth / 2)}px`;
+                    el.style.top = `${device.y - (el.offsetHeight / 2)}px`;
+                    draw();
+                }
+            }
+
+            function onMouseUp() {
+                isDragging = false;
+                el.style.cursor = 'pointer';
+                el.style.zIndex = '3';
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+        function findPath(startId, endId) {
+            const queue = [[findDevice(startId)]];
+            const visited = new Set([startId]);
+
+            while (queue.length > 0) {
+                const path = queue.shift();
+                const lastNode = path[path.length - 1];
+
+                if (lastNode.id === endId) return path;
+
+                const neighbors = getNeighbors(lastNode.id);
+                for (const neighbor of neighbors) {
+                    if (!visited.has(neighbor.id)) {
+                        visited.add(neighbor.id);
+                        const newPath = [...path, neighbor];
+                        queue.push(newPath);
+                    }
+                }
+            }
+            return null; // No path found
+        }
+        function getNeighbors(deviceId) {
+            const neighbors = [];
+            state.connections.forEach(c => {
+                if (c.from === deviceId) neighbors.push(findDevice(c.to));
+                else if (c.to === deviceId) neighbors.push(findDevice(c.from));
+            });
+            return neighbors;
+        }
+        function findPortConnecting(device, neighbor) {
+            for (const port in device.ports) {
+                if (device.ports[port].connectedTo === neighbor.id) {
+                    return port;
+                }
+            }
+            return null;
+        }
+        function pointLineDistance(px, py, x1, y1, x2, y2) {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            if (dx === 0 && dy === 0) return Math.hypot(px - x1, py - y1);
+            const t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+            const closestX = t < 0 ? x1 : t > 1 ? x2 : x1 + t * dx;
+            const closestY = t < 0 ? y1 : t > 1 ? y2 : y1 + t * dy;
+            return Math.hypot(px - closestX, py - closestY);
+        }
+        function openModal(header, body) {
+            dom.modalHeader.innerHTML = header;
+            dom.modalBody.innerHTML = body;
+            dom.modal.style.display = 'flex';
+        }
+        function closeModal() {
+            dom.modal.style.display = 'none';
+        }
+
+    </script>
+</body>
+</html>
